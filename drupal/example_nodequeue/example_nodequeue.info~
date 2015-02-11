@@ -1,8 +1,0 @@
-name = CNN Nodequeue
-description = This module is used to extend the nodequeue functionality.
-dependencies[] = nodequeue
-dependencies[] = views_bulk_operations
-dependencies[] = views
-package = GL Dev
-version = 7.x-1.0
-core = 7.x
