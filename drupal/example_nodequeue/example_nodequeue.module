@@ -1,0 +1,119 @@
+<?php
+
+/**
+ * @file
+ * Extend the Nodequeue module functionality.
+ */
+
+/*
+ * Home Page Left Rail Queue Machine Name.
+ */
+define('HOME_LEFT_QUEUE_NAME', 'home_left_rail');
+
+/**
+ * Implements hook_help().
+ */
+function example_nodequeue_help($path, $arg) {  
+  if ($path == 'admin/help#example_nodequeue') {
+    $output = '';
+    $output .= '<h3>' . t('About') . '</h3>';
+    $output .= '<p>' . t('This module create a Drupal action which is used to add data into selected nodequeue.') . '</p>';
+    $output .= '<h3>' . t('Uses') . '</h3>';
+    $output .= '<p>' . t('Action is available on view bulk operation action list when adding a VBO field in any view.') . '</p>';
+    return $output;
+  }
+}
+
+/**
+ * Implements hook_action_info().
+ * 
+ * Action to add data into nodequeue
+ */
+function example_nodequeue_action_info() {
+  return array(
+      'example_actions_add_nodequeue' => array(
+          'label' => t('Example action to add data into Nodequeue.'),
+          'type' => 'node',
+          'configurable' => FALSE,
+          'triggers' => array(
+              'node_presave',
+              'node_insert',
+              'node_update',
+          ),
+      ),
+  );
+}
+
+/**
+ * Handler of action created to add data into nodequeue.
+ * @param <type> $node
+ *    Node object tobe insert into nodequeue.
+ * @param <type> $context
+ * 	  Context contains the option for nodequeue
+ *    
+ */
+function example_actions_add_nodequeue($node, $context = array()) {
+  $qid = array();
+  $quid[$context['settings']['qids']] = $context['settings']['qids'];
+  example_nodequeue_add_node($qid, $node);
+}
+
+/*
+ * Add node into selected nodequeues.
+ * @param <type> $qid
+ *    Nodequeue id in which node tobe inserted.
+ * @param <type> $node
+ *    Node object tobe insert.
+ */
+
+function example_nodequeue_add_node($qid, $node) {
+  $queues = nodequeue_load_queues($qid, TRUE);
+  
+// Filter out queues by node type. We choose not to use nodequeue_get_qids() because it checks for access control which only matters if we administering a queue.
+  $eligible_queues = array();
+  foreach ($queues as $queue) {
+    if (in_array($node->type, $queue->types)) {
+      $eligible_queues[$queue->qid] = $queue;
+    }
+  }
+
+  if (!empty($eligible_queues)) {
+    // Remove the node from the eligible queues (if needed).
+    nodequeue_remove_action($node, array('qids' => array_keys($eligible_queues)));
+
+    // Use API to get the eligible subqueues
+    $eligible_subqueues = nodequeue_get_subqueues_by_node($eligible_queues, $node);
+    
+    // Add node to each subqueue.
+    foreach ($eligible_subqueues as $subqueue) {
+       nodequeue_subqueue_add($queues[$subqueue->qid], $subqueue, $node->nid);
+    }
+  }
+}
+
+/**
+ * Function is used to create VBO action settings form.
+ */
+function example_actions_add_nodequeue_views_bulk_operations_form($options) {
+  $queue_options = array();
+  if (!isset($options['qids'])) {
+    $options['qids'] = '';
+  }
+  $queues = nodequeue_load_queues(nodequeue_get_all_qids(0, 0, TRUE), TRUE);
+  foreach ($queues as $qid => $queue) {
+    $queue_options[$qid] = $queue->title;
+  }
+
+  if (count($options)) {
+    // Add form components.
+    $form['qids'] = array(
+        '#type' => 'select',
+        '#title' => t("Queue"),
+        '#default_value' => isset($options['qids']) ? $options['qids'] : '',
+        '#options' => $queue_options,
+        '#required' => TRUE,
+        '#description' => t('Specify the queues into which the node should be submitted.')
+    );
+  }
+  return $form;
+}
